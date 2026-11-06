@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Hệ Thống Quản Lý & Thống Kê Điểm Thi Theo Lớp</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- In tiêu đề khi xuất máy in / PDF -->
+  <div class="print-header">
+    <h2>BẢNG THỐNG KÊ KẾT QUẢ ĐIỂM THI THEO LỚP</h2>
+    <p style="font-size: 11pt; color: #333; margin-top: 4px;">Áp dụng chuẩn đánh giá học sinh - Trích xuất từ Hệ thống Quản lý Điểm thi</p>
+  </div>
+
+  <div class="app-container">
+
+    <!-- Header chính của ứng dụng -->
+    <header class="app-header">
+      <div class="header-top">
+        <div class="header-brand">
+          <div class="brand-icon">🎓</div>
+          <div class="brand-title">
+            <h1>HỆ THỐNG QUẢN LÝ & THỐNG KÊ ĐIỂM THI</h1>
+            <p>Tự động kết nối điểm theo Số báo danh và tổng hợp báo cáo phổ điểm theo lớp</p>
+          </div>
+        </div>
+        <div class="header-badges">
+          <div class="status-pill active" id="data-status-badge">
+            <span class="pulse-dot"></span>
+            <span>Dữ liệu: Danh_sach.xlsx sẵn sàng</span>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <!-- Khu vực thông báo tương tác -->
+    <div id="alert-container"></div>
+
+    <!-- Bảng điều khiển nạp file và tác vụ -->
+    <section class="control-panel">
+      <div class="control-grid">
+        
+        <!-- Khung chọn / thả file điểm -->
+        <div class="file-dropzone" id="file-dropzone">
+          <div class="file-dropzone-info">
+            <div class="dropzone-icon">📊</div>
+            <div class="dropzone-text">
+              <h4>Chọn file dữ liệu điểm thi (.xls, .xlsx)</h4>
+              <p>Hệ thống tự động đọc sheet "Bảng điểm tổng" (cột E) và kết nối vào cột F theo SBD</p>
+            </div>
+          </div>
+          <button type="button" class="btn-file-select" id="btn-select-file">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+            Chọn file điểm
+          </button>
+          <input type="file" id="score-file-input" accept=".xls,.xlsx" style="display: none;">
+        </div>
+
+        <!-- Các nút thao tác nghiệp vụ chính -->
+        <div class="control-actions">
+          <button type="button" class="btn btn-primary" id="btn-thong-ke">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="2" width="16" height="20" rx="2"></rect><line x1="8" y1="6" x2="16" y2="6"></line><line x1="16" y1="14" x2="16" y2="18"></line><path d="M16 10h.01"></path><path d="M12 10h.01"></path><path d="M8 10h.01"></path><path d="M12 14h.01"></path><path d="M8 14h.01"></path><path d="M12 18h.01"></path><path d="M8 18h.01"></path></svg>
+            Thống kê
+          </button>
+          
+          <button type="button" class="btn btn-success" id="btn-xuat-excel">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+            Xuất Excel (Trọn bộ 2 Sheet)
+          </button>
+        </div>
+
+      </div>
+
+      <!-- Tùy chọn mở rộng -->
+      <div class="sub-actions">
+        <div style="display: flex; align-items: center; gap: 16px; flex-wrap: wrap;">
+          <span>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: -2px; margin-right: 4px;"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+            File mẫu thử nghiệm:
+            <button type="button" id="btn-load-sample" style="color: var(--accent-blue); font-weight: 600;">Dùng file "mau_file.xls" có sẵn</button>
+          </span>
+          <span>
+            <button type="button" id="btn-change-roster" style="color: #475569;">Đổi file danh sách học sinh (.xlsx)</button>
+            <input type="file" id="roster-file-input" accept=".xlsx,.xls" style="display: none;">
+          </span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 12px;">
+          <button type="button" id="btn-xuat-stats-only">Xuất riêng Thống kê (.xlsx)</button>
+          <span>|</span>
+          <button type="button" id="btn-xuat-scores-only">Xuất riêng Danh sách điểm (.xlsx)</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Thẻ tóm tắt chỉ số nhanh (KPI Dashboard) -->
+    <section class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-icon blue">👥</div>
+        <div class="stat-content">
+          <div class="stat-label">Tổng số thí sinh</div>
+          <div class="stat-value" id="kpi-total-students">0</div>
+          <div class="stat-sub">Trên danh sách trường</div>
+        </div>
+      </div>
+
+      <div class="stat-card">
+        <div class="stat-icon green">📝</div>
+        <div class="stat-content">
+          <div class="stat-label">Đã kết nối điểm</div>
+          <div class="stat-value" id="kpi-scored-students">0</div>
+          <div class="stat-sub">Khớp đúng theo SBD</div>
+        </div>
+      </div>
+
+      <div class="stat-card">
+        <div class="stat-icon purple">🏫</div>
+        <div class="stat-content">
+          <div class="stat-label">Số lớp có điểm</div>
+          <div class="stat-value" id="kpi-scored-classes">0</div>
+          <div class="stat-sub">Hiển thị trong thống kê</div>
+        </div>
+      </div>
+
+      <div class="stat-card">
+        <div class="stat-icon amber">📈</div>
+        <div class="stat-content">
+          <div class="stat-label">Điểm trung bình chung</div>
+          <div class="stat-value" id="kpi-avg-score">-</div>
+          <div class="stat-sub">Toàn bộ các lớp thi</div>
+        </div>
+      </div>
+
+      <div class="stat-card">
+        <div class="stat-icon blue">🎯</div>
+        <div class="stat-content">
+          <div class="stat-label">Tỉ lệ đạt (Điểm >= 5)</div>
+          <div class="stat-value" id="kpi-pass-rate">-</div>
+          <div class="stat-sub">Mức đạt chuẩn trở lên</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Thanh chuyển Tab điều hướng -->
+    <nav class="tabs-nav">
+      <button type="button" class="tab-btn active" data-tab="tab-stats">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg>
+        Bảng Thống Kê Theo Lớp (Mẫu GD&ĐT)
+      </button>
+      <button type="button" class="tab-btn" data-tab="tab-students">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+        Danh Sách Điểm Chi Tiết
+        <span class="tab-badge" id="badge-students-count">0</span>
+      </button>
+      <button type="button" class="tab-btn" data-tab="tab-charts">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><path d="M12 2a10 10 0 0 1 10 10h-10z"></path></svg>
+        Biểu Đồ & Phân Tích
+      </button>
+    </nav>
+
+    <!-- ============================================================== -->
+    <!-- TAB 1: BẢNG THỐNG KÊ THEO LỚP (KHỚP MẪU ẢNH NGƯỜI DÙNG CUNG CẤP) -->
+    <!-- ============================================================== -->
+    <section class="tab-content active" id="tab-stats">
+      <div class="content-card">
+        
+        <div class="content-header">
+          <div class="content-header-title">
+            <h3>BẢNG THỐNG KÊ KẾT QUẢ ĐIỂM THI THEO LỚP</h3>
+            <span class="tag">Tự động ẩn các lớp không có điểm</span>
+          </div>
+
+          <div class="header-toolbar">
+            <label style="display: flex; align-items: center; gap: 6px; font-size: 12.5px; cursor: pointer; color: var(--text-muted);">
+              <input type="checkbox" id="opt-round-one" checked>
+              Làm tròn 1 chữ số thập phân (chuẩn Bộ GD&ĐT / khớp mẫu)
+            </label>
+            <label style="display: flex; align-items: center; gap: 6px; font-size: 12.5px; cursor: pointer; color: var(--text-muted); margin-left: 10px;">
+              <input type="checkbox" id="opt-col-ge9" checked>
+              Hiện cột Điểm &gt;= 9
+            </label>
+            <button type="button" class="btn btn-outline btn-sm" id="btn-copy-stats" title="Sao chép để dán vào Excel / Word">
+              📋 Sao chép bảng
+            </button>
+            <button type="button" class="btn btn-outline btn-sm" id="btn-print-stats">
+              🖨️ In báo cáo
+            </button>
+          </div>
+        </div>
+
+        <div class="table-responsive">
+          <table class="stats-table" id="stats-table">
+            <thead>
+              <tr id="stats-thead-row">
+                <th style="width: 45px;">TT</th>
+                <th style="width: 70px;">Lớp</th>
+                <th style="width: 85px;">Số lượng trên danh sách</th>
+                <th style="width: 85px;">Số lượng có điểm</th>
+                <th style="width: 75px;">Điểm trung bình</th>
+                <th style="width: 75px;">Điểm trung vị</th>
+                <th style="width: 65px;">Điểm cao nhất</th>
+                <th style="width: 65px;">Điểm thấp nhất</th>
+                <!-- Cột Điểm >= 9 (theo mẫu ảnh) -->
+                <th class="th-ge9" style="width: 75px;">Điểm&gt;=9</th>
+                <th class="th-ge9" style="width: 75px;">Tỉ lệ %</th>
+                <!-- Cột Điểm >= 8 -->
+                <th style="width: 75px;">Điểm&gt;=8</th>
+                <th style="width: 75px;">Tỉ lệ %</th>
+                <!-- Cột Điểm >= 5 -->
+                <th style="width: 75px;">Điểm&gt;=5</th>
+                <th style="width: 75px;">Tỉ lệ %</th>
+                <!-- Cột 3.5 < Điểm < 5 -->
+                <th style="width: 85px;">3.5&lt;Điểm&lt;5</th>
+                <th style="width: 75px;">Tỉ lệ %</th>
+                <!-- Cột Điểm < 3.5 -->
+                <th style="width: 75px;">Điểm&lt;3.5</th>
+                <th style="width: 75px;">Tỉ lệ %</th>
+              </tr>
+            </thead>
+            <tbody id="stats-table-body">
+              <!-- Render động qua JavaScript -->
+            </tbody>
+            <tfoot id="stats-table-foot">
+              <!-- Render dòng CỘNG qua JavaScript -->
+            </tfoot>
+          </table>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- ============================================================== -->
+    <!-- TAB 2: DANH SÁCH BẢNG ĐIỂM HỌC SINH CHI TIẾT (CÓ BỘ LỌC)        -->
+    <!-- ============================================================== -->
+    <section class="tab-content" id="tab-students">
+      <div class="content-card">
+        
+        <!-- Thanh bộ lọc theo Lớp, Phòng, Tình trạng điểm và Tìm kiếm -->
+        <div class="filter-bar">
+          <div class="filter-group">
+            <label for="filter-lop">Lớp:</label>
+            <select class="form-select" id="filter-lop">
+              <option value="">-- Tất cả các lớp --</option>
+            </select>
+          </div>
+
+          <div class="filter-group">
+            <label for="filter-phong">Phòng thi:</label>
+            <select class="form-select" id="filter-phong">
+              <option value="">-- Tất cả các phòng --</option>
+            </select>
+          </div>
+
+          <div class="filter-group">
+            <label for="filter-status">Điểm thi:</label>
+            <select class="form-select" id="filter-status">
+              <option value="all">Tất cả học sinh</option>
+              <option value="scored">Đã có điểm</option>
+              <option value="unscored">Chưa có điểm</option>
+              <option value="ge8">Điểm Giỏi (&gt;= 8.0)</option>
+              <option value="ge5">Điểm Đạt (&gt;= 5.0)</option>
+              <option value="lt5">Điểm Dưới 5 (&lt; 5.0)</option>
+              <option value="lt35">Điểm Liệt/Kém (&lt; 3.5)</option>
+            </select>
+          </div>
+
+          <div class="filter-group search-box">
+            <span class="search-icon">🔍</span>
+            <input type="text" class="form-input" id="filter-search" placeholder="Tìm theo SBD hoặc Họ và tên...">
+          </div>
+
+          <div class="filter-group" style="margin-left: auto;">
+            <button type="button" class="btn btn-primary btn-sm" id="btn-loc">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>
+              Lọc kết quả
+            </button>
+            <button type="button" class="btn btn-outline btn-sm" id="btn-reset-filter">
+              Đặt lại
+            </button>
+          </div>
+        </div>
+
+        <!-- Bảng danh sách học sinh theo đúng trường Danh_sach.xlsx -->
+        <div class="table-responsive">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th style="width: 70px;">STT</th>
+                <th style="width: 140px;">Số Báo Danh (SBD)</th>
+                <th>Họ và tên</th>
+                <th style="width: 120px;">Lớp</th>
+                <th style="width: 120px;">Phòng</th>
+                <th style="width: 140px;">Điểm thi (Cột F)</th>
+              </tr>
+            </thead>
+            <tbody id="students-table-body">
+              <!-- Render động qua JavaScript -->
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Phân trang danh sách học sinh -->
+        <div class="pagination-bar">
+          <div id="pagination-info">Đang hiển thị dữ liệu...</div>
+          <div style="display: flex; align-items: center; gap: 14px;">
+            <div style="display: flex; align-items: center; gap: 6px;">
+              <span style="font-size: 12px; color: var(--text-muted);">Hiển thị:</span>
+              <select class="form-select" id="page-size-select" style="padding: 3px 8px; font-size: 12px;">
+                <option value="25">25 dòng</option>
+                <option value="50" selected>50 dòng</option>
+                <option value="100">100 dòng</option>
+                <option value="all">Tất cả</option>
+              </select>
+            </div>
+            <div class="page-controls" id="students-pagination"></div>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- ============================================================== -->
+    <!-- TAB 3: BIỂU ĐỒ TRỰC QUAN & PHÂN TÍCH SO SÁNH                   -->
+    <!-- ============================================================== -->
+    <section class="tab-content" id="tab-charts">
+      <div class="charts-grid">
+        
+        <!-- Biểu đồ 1: So sánh Điểm TB và Trung vị -->
+        <div class="chart-card">
+          <h4>📊 So Sánh Điểm Trung Bình & Điểm Trung Vị Giữa Các Lớp</h4>
+          <div class="chart-wrapper">
+            <canvas id="chart-comparison"></canvas>
+          </div>
+        </div>
+
+        <!-- Biểu đồ 2: Xếp chồng tỉ lệ các mức điểm -->
+        <div class="chart-card">
+          <h4>📈 Cơ Cấu Phân Bố Phổ Điểm Từng Lớp (% Giỏi, Đạt, Yếu, Kém)</h4>
+          <div class="chart-wrapper">
+            <canvas id="chart-distribution"></canvas>
+          </div>
+        </div>
+
+        <!-- Biểu đồ 3: Toàn khối (Doughnut) -->
+        <div class="chart-card" style="grid-column: 1 / -1; max-width: 600px; margin: 0 auto; width: 100%;">
+          <h4>🎯 Tỉ Lệ Các Mức Điểm Toàn Khối</h4>
+          <div class="chart-wrapper" style="height: 280px;">
+            <canvas id="chart-doughnut"></canvas>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+  </div>
+
+  <!-- Nạp các thư viện JavaScript đã tải sẵn offline -->
+  <script src="xlsx.full.min.js"></script>
+  <script src="chart.umd.min.js"></script>
+  <!-- Dữ liệu học sinh mặc định lấy sẵn từ sheet 'Danh_sach' của file 'Danh_sach.xlsx' -->
+  <script src="danh_sach_data.js"></script>
+  <!-- Mã nguồn điều khiển chính của Web App -->
+  <script src="app.js"></script>
+
+</body>
+</html>
