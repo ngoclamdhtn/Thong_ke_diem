@@ -41,6 +41,15 @@
       barComparison: null,
       stackedDistribution: null,
       doughnutTotal: null
+    },
+
+    // Quản lý chuyển cấu trúc OLM sang TNMaker
+    olm: {
+      fileName: '',
+      rawRows: null,
+      detectedStructure: null,
+      selectedStructure: 'auto',
+      convertedData: null
     }
   };
 
@@ -315,6 +324,9 @@
     if (btnCopyTable) {
       btnCopyTable.addEventListener('click', copyStatsTableToClipboard);
     }
+
+    // 10. Chuyển cấu trúc OLM sang TNMaker
+    setupOlmEventListeners();
   }
 
   function readFilterInputs() {
@@ -1505,6 +1517,493 @@
         <button style="background:none; border:none; cursor:pointer; font-size:16px; color:inherit; font-weight:bold;" onclick="this.parentElement.remove()">&times;</button>
       </div>
     `;
+  }
+
+  // ==============================================================
+  // MODULE: CHUYỂN CẤU TRÚC ĐÁP ÁN OLM SANG TNMAKER
+  // Tạo file Excel có cả 2 sheet "BTPRO" và "Sheet2" giống hệt nhau
+  // ==============================================================
+
+  const OLM_CONFIGS = {
+    "12_mcq": {
+      name: "12 câu nhiều lựa chọn, 4 câu đúng-sai (4 ý/câu), 6 câu trả lời ngắn (Tổng 22 câu)",
+      short_name: "12 câu nhiều lựa chọn (22 câu - Toán)",
+      mcq_range: [1, 13],              // Cột 1..12 (B:M - 12 câu, 0-based)
+      tf_start_cols: [13, 17, 21, 25], // Cột 13, 17, 21, 25 (N, R, V, Z - 4 câu x 4 ý)
+      sa_range: [29, 35],              // Cột 29..34 (AD:AI - 6 câu)
+      total_questions: 22,
+      tf_start_row: 14,                // Câu 13 tại dòng 14 của sheet BTPRO
+      sa_start_row: 18,                // Câu 17 tại dòng 18 của sheet BTPRO
+      max_row: 23
+    },
+    "18_mcq": {
+      name: "18 câu nhiều lựa chọn, 4 câu đúng-sai (4 ý/câu), 6 câu trả lời ngắn (Tổng 28 câu)",
+      short_name: "18 câu nhiều lựa chọn (28 câu - KHTN/KHXH)",
+      mcq_range: [1, 19],              // Cột 1..18 (B:S - 18 câu)
+      tf_start_cols: [19, 23, 27, 31], // Cột 19, 23, 27, 31 (T, X, AB, AF)
+      sa_range: [35, 41],              // Cột 35..40 (AJ:AO - 6 câu)
+      total_questions: 28,
+      tf_start_row: 20,                // Câu 19 tại dòng 20
+      sa_start_row: 24,                // Câu 23 tại dòng 24
+      max_row: 29
+    },
+    "24_mcq": {
+      name: "24 câu nhiều lựa chọn, 4 câu đúng-sai (4 ý/câu), 0 câu trả lời ngắn (Tổng 28 câu)",
+      short_name: "24 câu nhiều lựa chọn (28 câu)",
+      mcq_range: [1, 25],              // Cột 1..24 (B:Y - 24 câu)
+      tf_start_cols: [25, 29, 33, 37], // Cột 25, 29, 33, 37 (Z, AD, AH, AL)
+      sa_range: [41, 41],              // 0 câu trả lời ngắn
+      total_questions: 28,
+      tf_start_row: 26,                // Câu 25 tại dòng 26
+      sa_start_row: null,              // Không có câu trả lời ngắn
+      max_row: 29
+    },
+    "40_mcq": {
+      name: "40 câu nhiều lựa chọn (Tổng 40 câu)",
+      short_name: "40 câu nhiều lựa chọn (40 câu)",
+      mcq_range: [1, 41],              // Cột 1..40 (B:AO - 40 câu)
+      tf_start_cols: [],               // 0 câu đúng-sai
+      sa_range: [41, 41],              // 0 câu trả lời ngắn
+      total_questions: 40,
+      tf_start_row: null,              // Không có phần đúng-sai
+      sa_start_row: null,              // Không có phần trả lời ngắn
+      max_row: 41
+    }
+  };
+
+  function setupOlmEventListeners() {
+    const modalOlm = document.getElementById('modal-olm');
+    const btnOpenModal = document.getElementById('btn-open-olm-modal');
+    const btnCloseModal = document.getElementById('btn-close-olm-modal');
+    const btnCancelModal = document.getElementById('btn-cancel-olm-modal');
+    const btnExportTNMaker = document.getElementById('btn-export-tnmaker');
+
+    const olmFileInput = document.getElementById('olm-file-input');
+    const olmDropzone = document.getElementById('olm-file-dropzone');
+    const btnChooseFile = document.getElementById('btn-choose-olm-file');
+    const btnLoadSample = document.getElementById('btn-load-sample-olm');
+
+    if (btnOpenModal && modalOlm) {
+      btnOpenModal.addEventListener('click', () => {
+        modalOlm.classList.add('show');
+        // Nếu đã có dữ liệu mẫu trước đó, tự động chuyển đổi hiển thị
+        if (state.olm.rawRows) {
+          processOlmConversion();
+        }
+      });
+    }
+
+    const closeModal = () => {
+      if (modalOlm) modalOlm.classList.remove('show');
+    };
+
+    if (btnCloseModal) btnCloseModal.addEventListener('click', closeModal);
+    if (btnCancelModal) btnCancelModal.addEventListener('click', closeModal);
+    if (modalOlm) {
+      modalOlm.addEventListener('click', (e) => {
+        if (e.target === modalOlm) closeModal();
+      });
+    }
+
+    if (btnChooseFile && olmFileInput) {
+      btnChooseFile.addEventListener('click', (e) => {
+        e.stopPropagation();
+        olmFileInput.click();
+      });
+    }
+
+    if (olmDropzone && olmFileInput) {
+      olmDropzone.addEventListener('click', (e) => {
+        if (e.target !== btnChooseFile) olmFileInput.click();
+      });
+
+      ['dragenter', 'dragover'].forEach(evName => {
+        olmDropzone.addEventListener(evName, (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          olmDropzone.classList.add('dragover');
+        });
+      });
+
+      ['dragleave', 'drop'].forEach(evName => {
+        olmDropzone.addEventListener(evName, (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          olmDropzone.classList.remove('dragover');
+        });
+      });
+
+      olmDropzone.addEventListener('drop', (e) => {
+        if (e.dataTransfer && e.dataTransfer.files.length > 0) {
+          handleOlmFile(e.dataTransfer.files[0]);
+        }
+      });
+    }
+
+    if (olmFileInput) {
+      olmFileInput.addEventListener('change', (e) => {
+        if (e.target.files.length > 0) {
+          handleOlmFile(e.target.files[0]);
+        }
+      });
+    }
+
+    if (btnLoadSample) {
+      btnLoadSample.addEventListener('click', loadSampleOlmFile);
+    }
+
+    // Lắng nghe thay đổi tùy chọn cấu trúc đề thi
+    const radioInputs = document.querySelectorAll('input[name="olm-structure"]');
+    radioInputs.forEach(r => {
+      r.addEventListener('change', () => {
+        state.olm.selectedStructure = r.value;
+        processOlmConversion();
+      });
+    });
+
+    if (btnExportTNMaker) {
+      btnExportTNMaker.addEventListener('click', exportTNMakerWorkbook);
+    }
+  }
+
+  function handleOlmFile(file) {
+    if (!file) return;
+    state.olm.fileName = file.name;
+
+    const reader = new FileReader();
+    const statusMsg = document.getElementById('olm-status-msg');
+    if (statusMsg) {
+      statusMsg.innerHTML = `<span>⏳ Đang đọc file đáp án "${escapeHtml(file.name)}"...</span>`;
+    }
+
+    reader.onload = function (e) {
+      try {
+        const data = new Uint8Array(e.target.result);
+        const wb = XLSX.read(data, { type: 'array' });
+        const sheetName = wb.SheetNames[0];
+        const sheet = wb.Sheets[sheetName];
+        const rows = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+
+        if (!rows || rows.length < 3) {
+          throw new Error('File đáp án OLM không đủ dữ liệu (tối thiểu 3 hàng).');
+        }
+
+        state.olm.rawRows = rows;
+
+        // Cập nhật tên hiển thị trên giao diện
+        const nameText = document.getElementById('olm-file-name-text');
+        const subText = document.getElementById('olm-file-sub-text');
+        if (nameText) nameText.textContent = `File: ${file.name}`;
+        if (subText) subText.textContent = `Đã nạp ${rows.length} hàng dữ liệu (${(file.size / 1024).toFixed(1)} KB)`;
+
+        // Tự động nhận diện cấu trúc
+        const detected = detectOlmStructure(rows);
+        state.olm.detectedStructure = detected;
+
+        processOlmConversion();
+
+      } catch (err) {
+        console.error('Lỗi đọc file OLM:', err);
+        if (statusMsg) {
+          statusMsg.innerHTML = `<span style="color: #dc2626;">❌ Lỗi đọc file: ${escapeHtml(err.message)}</span>`;
+        }
+      }
+    };
+
+    reader.readAsArrayBuffer(file);
+  }
+
+  function loadSampleOlmFile() {
+    if (window.SAMPLE_OLM_ROWS && Array.isArray(window.SAMPLE_OLM_ROWS) && window.SAMPLE_OLM_ROWS.length > 0) {
+      state.olm.fileName = 'Dapan_mau_OLM.xlsx';
+      state.olm.rawRows = window.SAMPLE_OLM_ROWS;
+
+      const nameText = document.getElementById('olm-file-name-text');
+      const subText = document.getElementById('olm-file-sub-text');
+      if (nameText) nameText.textContent = 'File: Dapan.xlsx (Mẫu OLM 40 câu)';
+      if (subText) subText.textContent = `Đã nạp ${window.SAMPLE_OLM_ROWS.length} hàng dữ liệu mẫu`;
+
+      const detected = detectOlmStructure(window.SAMPLE_OLM_ROWS);
+      state.olm.detectedStructure = detected;
+      processOlmConversion();
+      return;
+    }
+
+    // Dự phòng qua fetch
+    fetch('Dapan_mau_OLM.xlsx')
+      .then(res => res.arrayBuffer())
+      .then(buf => {
+        const file = new File([buf], 'Dapan_mau_OLM.xlsx');
+        handleOlmFile(file);
+      })
+      .catch(() => {
+        document.getElementById('olm-file-input')?.click();
+      });
+  }
+
+  function cleanOlmVal(val) {
+    if (val === null || val === undefined) return '';
+    if (typeof val === 'number' && Number.isInteger(val)) return String(val);
+    return String(val).trim();
+  }
+
+  /**
+   * Tự động nhận diện cấu trúc file OLM (12, 18, 24 hoặc 40 câu)
+   */
+  function detectOlmStructure(rows) {
+    if (!rows || rows.length < 2) return '40_mcq';
+
+    const row1 = (rows[0] || []).map(cleanOlmVal);
+    const row2 = (rows[1] || []).map(cleanOlmVal);
+
+    // 1. Kiểm tra vị trí câu đúng-sai đầu tiên ở dòng 2 (0-based: col 13, 19, 25, 40)
+    const val14 = (row2[13] || '').toLowerCase(); // Cột 14
+    const val20 = (row2[19] || '').toLowerCase(); // Cột 20
+    const val25 = (row2[24] || '').toLowerCase(); // Cột 25
+    const val26 = (row2[25] || '').toLowerCase(); // Cột 26
+    const val41 = (row2[40] || '').toLowerCase(); // Cột 41
+
+    if (val14 === '1a') return '12_mcq';
+    if (val20 === '1a') return '18_mcq';
+    if (['25a', '1a'].includes(val26) || (val25 === '24' && val26.endsWith('a'))) return '24_mcq';
+    if (val41 === '40') return '40_mcq';
+
+    // 2. Dòng 1 mô tả các phần
+    const row1Text = row1.join(' ').toLowerCase();
+    if (['đến câu 40', 'câu 1 đến câu 40', '40 câu', '40.'].some(k => row1Text.includes(k))) return '40_mcq';
+    if (['đến câu 24', 'câu 1 đến câu 24', '24 câu', 'câu 25 đến câu 28'].some(k => row1Text.includes(k))) return '24_mcq';
+    if (['đến câu 18', 'câu 1 đến câu 18', '18 câu'].some(k => row1Text.includes(k))) return '18_mcq';
+    if (['đến câu 12', 'câu 1 đến câu 12', '12 câu'].some(k => row1Text.includes(k))) return '12_mcq';
+
+    // 3. Kiểm tra loại dữ liệu tại các dòng đáp án (từ dòng 4)
+    for (let r = 3; r < Math.min(10, rows.length); r++) {
+      const row = rows[r] || [];
+      const c20 = cleanOlmVal(row[19]).toUpperCase();
+      const c26 = cleanOlmVal(row[25]).toUpperCase();
+      const c41 = cleanOlmVal(row[40]).toUpperCase();
+
+      if (['A', 'B', 'C', 'D'].includes(c20) && ['A', 'B', 'C', 'D'].includes(c26) && ['A', 'B', 'C', 'D'].includes(c41)) return '40_mcq';
+      if (['A', 'B', 'C', 'D'].includes(c20) && ['Đ', 'S', 'D', 'S'].includes(c26)) return '24_mcq';
+      if (['Đ', 'S', 'D', 'S'].includes(c20)) return '18_mcq';
+    }
+
+    const maxCol = Math.max(...rows.map(r => r ? r.length : 0));
+    return maxCol <= 35 ? '12_mcq' : '40_mcq';
+  }
+
+  /**
+   * Chuyển đổi ma trận đáp án từ OLM sang TNMaker (BTPRO & Sheet2)
+   */
+  function processOlmConversion() {
+    const rows = state.olm.rawRows;
+    const statusMsg = document.getElementById('olm-status-msg');
+    const previewSection = document.getElementById('olm-preview-section');
+    const btnExport = document.getElementById('btn-export-tnmaker');
+
+    if (!rows || rows.length < 3) {
+      if (statusMsg) {
+        statusMsg.innerHTML = '<span>💡 Vui lòng chọn file Excel đáp án từ OLM để bắt đầu chuyển đổi.</span>';
+      }
+      if (previewSection) previewSection.style.display = 'none';
+      if (btnExport) btnExport.disabled = true;
+      return;
+    }
+
+    // Xác định cấu trúc áp dụng
+    let structKey = state.olm.selectedStructure;
+    if (structKey === 'auto') {
+      structKey = state.olm.detectedStructure || detectOlmStructure(rows);
+    }
+
+    const config = OLM_CONFIGS[structKey] || OLM_CONFIGS['40_mcq'];
+
+    // Cập nhật thông báo trạng thái
+    if (statusMsg) {
+      const isAuto = state.olm.selectedStructure === 'auto';
+      statusMsg.innerHTML = `
+        <span style="color: #15803d; font-weight: 600;">✓ ${isAuto ? 'Tự động phát hiện cấu trúc:' : 'Đang chọn thủ công cấu trúc:'}</span>
+        <span style="color: #0f172a; font-weight: 700;">${config.name}</span>
+      `;
+    }
+
+    // Trích xuất mã đề và đáp án
+    const headerKeywords = new Set(['điểm', 'diem', 'mã đề', 'ma de', 'sbd', 'stt']);
+    const sourceRows = [];
+
+    for (let r = 2; r < rows.length; r++) {
+      const row = rows[r];
+      if (!row || row.length === 0) continue;
+
+      const maDeRaw = row[0];
+      if (maDeRaw === undefined || maDeRaw === null) continue;
+      const maDeStr = cleanOlmVal(maDeRaw);
+      if (!maDeStr || headerKeywords.has(maDeStr.toLowerCase())) continue;
+
+      // 1. Trắc nghiệm nhiều lựa chọn
+      const mcq = [];
+      for (let c = config.mcq_range[0]; c < config.mcq_range[1]; c++) {
+        mcq.push(cleanOlmVal(row[c]));
+      }
+
+      // 2. Đúng/Sai (ghép 4 ý thành 1 chuỗi ví dụ ĐSĐS)
+      const tf = [];
+      for (const startCol of config.tf_start_cols) {
+        let fourParts = '';
+        for (let c = startCol; c < startCol + 4; c++) {
+          fourParts += cleanOlmVal(row[c]);
+        }
+        tf.push(fourParts);
+      }
+
+      // 3. Trả lời ngắn
+      const sa = [];
+      for (let c = config.sa_range[0]; c < config.sa_range[1]; c++) {
+        sa.push(cleanOlmVal(row[c]));
+      }
+
+      const answers = mcq.concat(tf, sa);
+      sourceRows.push({ maDe: maDeStr, answers });
+    }
+
+    if (sourceRows.length === 0) {
+      if (statusMsg) {
+        statusMsg.innerHTML = '<span style="color: #dc2626;">⚠️ Không tìm thấy mã đề nào hợp lệ trong file Excel. Vui lòng kiểm tra lại cột A.</span>';
+      }
+      if (previewSection) previewSection.style.display = 'none';
+      if (btnExport) btnExport.disabled = true;
+      return;
+    }
+
+    // Xây dựng ma trận chuyển vị cho TNMaker:
+    // Hàng 0: ['Câu\\Mã đề', maDe1, maDe2, ...]
+    // Hàng 1..total_questions: [câu, ans_maDe1, ans_maDe2, ...]
+    const headerAoa = ['Câu\\Mã đề'];
+    sourceRows.forEach(sr => headerAoa.push(sr.maDe));
+
+    const matrix = [headerAoa];
+    for (let q = 1; q <= config.total_questions; q++) {
+      const qRow = [q];
+      for (let i = 0; i < sourceRows.length; i++) {
+        qRow.push(sourceRows[i].answers[q - 1] || '');
+      }
+      matrix.push(qRow);
+    }
+
+    state.olm.convertedData = {
+      config: config,
+      sourceRows: sourceRows,
+      matrix: matrix
+    };
+
+    renderOlmPreview(matrix, config, sourceRows);
+    if (previewSection) previewSection.style.display = 'block';
+    if (btnExport) btnExport.disabled = false;
+  }
+
+  /**
+   * Render xem trước ma trận TNMaker trên web
+   */
+  function renderOlmPreview(matrix, config, sourceRows) {
+    const table = document.getElementById('olm-preview-table');
+    const summaryTag = document.getElementById('olm-preview-summary');
+    if (!table) return;
+
+    if (summaryTag) {
+      summaryTag.textContent = `${sourceRows.length} mã đề (${sourceRows.map(s => s.maDe).slice(0, 4).join(', ')}${sourceRows.length > 4 ? '...' : ''}), ${config.total_questions} câu`;
+    }
+
+    table.innerHTML = '';
+
+    // Header
+    const thead = document.createElement('thead');
+    const headerTr = document.createElement('tr');
+    matrix[0].forEach((cellText, colIdx) => {
+      const th = document.createElement('th');
+      th.textContent = cellText;
+      if (colIdx === 0) th.style.minWidth = '90px';
+      headerTr.appendChild(th);
+    });
+    thead.appendChild(headerTr);
+    table.appendChild(thead);
+
+    // Body
+    const tbody = document.createElement('tbody');
+    const tfStart = config.tf_start_row ? config.tf_start_row - 1 : null;
+    const saStart = config.sa_start_row ? config.sa_start_row - 1 : null;
+
+    for (let r = 1; r < matrix.length; r++) {
+      const tr = document.createElement('tr');
+      if (r === tfStart || r === saStart) {
+        tr.className = 'section-highlight';
+      }
+      matrix[r].forEach(cellText => {
+        const td = document.createElement('td');
+        td.textContent = cellText;
+        tr.appendChild(td);
+      });
+      tbody.appendChild(tr);
+    }
+    table.appendChild(tbody);
+  }
+
+  /**
+   * Xuất file Excel TNMaker:
+   * YÊU CẦU: Tạo thêm một sheet tên là "Sheet2" có nội dung GIỐNG HỆT sheet "BTPRO"
+   */
+  function exportTNMakerWorkbook() {
+    const data = state.olm.convertedData;
+    if (!data || !data.matrix) {
+      alert('Chưa có dữ liệu chuyển đổi để xuất Excel.');
+      return;
+    }
+
+    try {
+      const wb = XLSX.utils.book_new();
+      const matrix = data.matrix;
+      const numCodes = data.sourceRows.length;
+
+      // Cấu hình độ rộng các cột
+      const colWidths = [{ wch: 13 }]; // Cột Câu\Mã đề
+      for (let i = 0; i < numCodes; i++) {
+        colWidths.push({ wch: 12 });
+      }
+
+      // ==============================================================
+      // SHEET 1: BTPRO
+      // ==============================================================
+      const wsBtpro = XLSX.utils.aoa_to_sheet(matrix);
+      wsBtpro['!cols'] = colWidths;
+      XLSX.utils.book_append_sheet(wb, wsBtpro, 'BTPRO');
+
+      // ==============================================================
+      // SHEET 2: Sheet2 (NỘI DUNG GIỐNG HỆT SHEET "BTPRO")
+      // ==============================================================
+      const wsSheet2 = XLSX.utils.aoa_to_sheet(matrix);
+      wsSheet2['!cols'] = colWidths;
+      XLSX.utils.book_append_sheet(wb, wsSheet2, 'Sheet2');
+
+      // Đặt tên file xuất: [Ten_file]_da_chuyen_cau_truc.xlsx
+      let originalStem = 'Dapan_OLM';
+      if (state.olm.fileName) {
+        originalStem = state.olm.fileName.replace(/\.[^/.]+$/, '');
+      }
+      const outFileName = `${originalStem}_da_chuyen_cau_truc.xlsx`;
+
+      downloadWorkbook(wb, outFileName);
+
+      showBanner(
+        `🎉 <strong>Chuyển đổi thành công!</strong> Đã xuất file <strong>"${outFileName}"</strong> gồm cả 2 sheet <strong>BTPRO</strong> và <strong>Sheet2</strong> (nội dung giống hệt nhau) tương thích 100% với TNMaker!`,
+        'success'
+      );
+
+      // Đóng modal sau khi xuất
+      const modalOlm = document.getElementById('modal-olm');
+      if (modalOlm) modalOlm.classList.remove('show');
+
+    } catch (err) {
+      console.error('Lỗi khi xuất file Excel TNMaker:', err);
+      alert('Không thể xuất file Excel TNMaker: ' + err.message);
+    }
   }
 
   function escapeHtml(str) {

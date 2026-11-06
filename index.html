@@ -69,6 +69,11 @@
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
             Xuất Excel (Trọn bộ 2 Sheet)
           </button>
+
+          <button type="button" class="btn btn-olm" id="btn-open-olm-modal">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"></polyline><path d="M3 11V9a4 4 0 0 1 4-4h14"></path><polyline points="7 23 3 19 7 15"></polyline><path d="M21 13v2a4 4 0 0 1-4 4H3"></path></svg>
+            Chuyển cấu trúc OLM sang TNMAKER
+          </button>
         </div>
 
       </div>
@@ -353,6 +358,125 @@
       </div>
     </section>
 
+  </div>
+
+  <!-- Modal Chuyển cấu trúc OLM sang TNMaker -->
+  <div class="modal-overlay" id="modal-olm">
+    <div class="modal-box modal-lg">
+      <div class="modal-header">
+        <div>
+          <h3 style="display: flex; align-items: center; gap: 8px;">
+            <span style="font-size: 20px;">🔄</span>
+            CHUYỂN CẤU TRÚC ĐÁP ÁN OLM SANG TNMAKER
+          </h3>
+          <p style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">
+            Tự động xoay ma trận đáp án từ OLM sang định dạng TNMaker / BTPRO (gồm 2 sheet <strong>BTPRO</strong> &amp; <strong>Sheet2</strong> giống hệt nhau).
+          </p>
+        </div>
+        <button type="button" class="modal-close" id="btn-close-olm-modal">&times;</button>
+      </div>
+
+      <div class="modal-body">
+        <!-- 1. Chọn file OLM -->
+        <div style="margin-bottom: 16px;">
+          <label style="font-weight: 700; font-size: 13px; display: block; margin-bottom: 6px; color: #1e293b;">
+            1. Chọn file Excel đáp án từ OLM (.xlsx, .xls):
+          </label>
+          <div class="file-dropzone" id="olm-file-dropzone" style="padding: 12px 16px;">
+            <div class="file-dropzone-info">
+              <div class="dropzone-icon" style="background: #ede9fe; color: #6366f1;">📑</div>
+              <div class="dropzone-text">
+                <h4 id="olm-file-name-text">Chưa chọn file đáp án OLM...</h4>
+                <p id="olm-file-sub-text">Bấm vào đây hoặc kéo thả file đáp án OLM (.xlsx, .xls)</p>
+              </div>
+            </div>
+            <button type="button" class="btn-file-select" id="btn-choose-olm-file" style="background: #6366f1;">
+              Chọn file OLM
+            </button>
+            <input type="file" id="olm-file-input" accept=".xlsx,.xls,.xlsm" style="display: none;">
+          </div>
+          <div style="margin-top: 8px; font-size: 12px; color: var(--text-muted); display: flex; align-items: center; justify-content: space-between;">
+            <span>💡 File mẫu có sẵn: <button type="button" id="btn-load-sample-olm" style="color: #6366f1; background: none; border: none; font-weight: 600; cursor: pointer; text-decoration: underline;">Dùng file mẫu "Dapan.xlsx" của OLM</button></span>
+          </div>
+        </div>
+
+        <!-- 2. Tùy chọn cấu trúc đề thi -->
+        <div style="margin-bottom: 16px;">
+          <label style="font-weight: 700; font-size: 13px; display: block; margin-bottom: 6px; color: #1e293b;">
+            2. Tùy chọn cấu trúc đề thi:
+          </label>
+          <div class="radio-card-list">
+            <label class="radio-card">
+              <input type="radio" name="olm-structure" value="auto" checked>
+              <div class="radio-card-content">
+                <strong>Tự động nhận diện theo cấu trúc file Excel (Khuyên dùng)</strong>
+                <span>Hệ thống tự động phân tích tiêu đề và dữ liệu để chọn cấu trúc chuẩn nhất</span>
+              </div>
+            </label>
+
+            <label class="radio-card">
+              <input type="radio" name="olm-structure" value="12_mcq">
+              <div class="radio-card-content">
+                <strong>12 câu nhiều lựa chọn + 4 câu đúng-sai + 6 câu trả lời ngắn (Tổng 22 câu - Môn Toán)</strong>
+                <span>Cấu trúc đề minh họa 2025 môn Toán THPT của Bộ GD&ĐT</span>
+              </div>
+            </label>
+
+            <label class="radio-card">
+              <input type="radio" name="olm-structure" value="18_mcq">
+              <div class="radio-card-content">
+                <strong>18 câu nhiều lựa chọn + 4 câu đúng-sai + 6 câu trả lời ngắn (Tổng 28 câu - KHTN/KHXH)</strong>
+                <span>Cấu trúc đề các môn Lý, Hóa, Sinh, Sử, Địa, GDCD...</span>
+              </div>
+            </label>
+
+            <label class="radio-card">
+              <input type="radio" name="olm-structure" value="24_mcq">
+              <div class="radio-card-content">
+                <strong>24 câu nhiều lựa chọn + 4 câu đúng-sai + 0 câu trả lời ngắn (Tổng 28 câu)</strong>
+                <span>Cấu trúc đề 24 câu trắc nghiệm nhiều lựa chọn và 4 câu đúng-sai</span>
+              </div>
+            </label>
+
+            <label class="radio-card">
+              <input type="radio" name="olm-structure" value="40_mcq">
+              <div class="radio-card-content">
+                <strong>40 câu nhiều lựa chọn (Tổng 40 câu - Đề trắc nghiệm chuẩn)</strong>
+                <span>Cấu trúc đề 40 câu trắc nghiệm 4 đáp án A, B, C, D</span>
+              </div>
+            </label>
+          </div>
+
+          <!-- Thông báo nhận diện cấu trúc -->
+          <div class="olm-status-box" id="olm-status-msg">
+            <span>💡 Vui lòng chọn file Excel đáp án từ OLM để bắt đầu chuyển đổi.</span>
+          </div>
+        </div>
+
+        <!-- 3. Khu vực xem trước bảng đáp án TNMaker -->
+        <div id="olm-preview-section" style="display: none;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+            <label style="font-weight: 700; font-size: 13px; color: #1e293b;">
+              3. Xem trước cấu trúc đáp án TNMaker (Sheet "BTPRO" &amp; "Sheet2"):
+            </label>
+            <span class="tag" id="olm-preview-summary" style="background: #ede9fe; color: #6366f1; font-weight: 600;">0 mã đề, 0 câu</span>
+          </div>
+          <div class="olm-preview-wrap">
+            <table class="olm-preview-table" id="olm-preview-table">
+              <!-- Render động -->
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline" id="btn-cancel-olm-modal">Đóng</button>
+        <button type="button" class="btn btn-olm" id="btn-export-tnmaker" disabled>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+          Xuất file Excel TNMaker (Gồm 2 sheet: BTPRO &amp; Sheet2)
+        </button>
+      </div>
+    </div>
   </div>
 
   <!-- Nạp các thư viện JavaScript đã tải sẵn offline -->

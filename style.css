@@ -308,6 +308,17 @@ body {
   border-color: #94a3b8;
 }
 
+.btn-olm {
+  background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+  color: #ffffff;
+  border-color: #4f46e5;
+  box-shadow: 0 2px 6px rgba(79, 70, 229, 0.3);
+}
+.btn-olm:hover {
+  background: linear-gradient(135deg, #4f46e5 0%, #4338ca 100%);
+  box-shadow: 0 4px 10px rgba(79, 70, 229, 0.4);
+}
+
 .btn-sm {
   padding: 5px 12px;
   font-size: 12px;
@@ -915,6 +926,115 @@ body {
   justify-content: flex-end;
   gap: 10px;
   background: #f8fafc;
+}
+
+.modal-box.modal-lg {
+  max-width: 920px;
+}
+
+/* OLM Converter Component Styling */
+.radio-card-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 12px 0 16px;
+}
+
+.radio-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 10px 14px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: #ffffff;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.radio-card:hover {
+  border-color: #818cf8;
+  background: #f5f3ff;
+}
+
+.radio-card input[type="radio"] {
+  margin-top: 3px;
+  accent-color: #6366f1;
+  cursor: pointer;
+}
+
+.radio-card-content {
+  font-size: 13px;
+  color: var(--text-main);
+}
+
+.radio-card-content strong {
+  display: block;
+  font-size: 13px;
+  color: #1e293b;
+}
+
+.radio-card-content span {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.olm-status-box {
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  color: #1e40af;
+  font-size: 13px;
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.olm-preview-wrap {
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  max-height: 280px;
+  overflow: auto;
+  margin-top: 10px;
+  background: #ffffff;
+}
+
+.olm-preview-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  text-align: center;
+}
+
+.olm-preview-table th, .olm-preview-table td {
+  border: 1px solid #cbd5e1;
+  padding: 6px 10px;
+  white-space: nowrap;
+}
+
+.olm-preview-table th {
+  background: #d9eaf7;
+  color: #0f172a;
+  font-weight: 700;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
+.olm-preview-table td:first-child {
+  background: #f8fafc;
+  font-weight: 700;
+  color: #1e3a8a;
+  position: sticky;
+  left: 0;
+  z-index: 1;
+}
+
+.olm-preview-table tr.section-highlight td {
+  background-color: #e2f0d9 !important;
+  font-weight: 600;
 }
 
 /* Print Styles */
