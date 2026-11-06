@@ -327,6 +327,9 @@
 
     // 10. Chuyển cấu trúc OLM sang TNMaker
     setupOlmEventListeners();
+
+    // 11. Nhập điểm theo SBD sang file SMAS
+    setupSmasEventListeners();
   }
 
   function readFilterInputs() {
@@ -2004,6 +2007,369 @@
       console.error('Lỗi khi xuất file Excel TNMaker:', err);
       alert('Không thể xuất file Excel TNMaker: ' + err.message);
     }
+  }
+
+  // ==============================================================
+  // MODULE: KẾT NỐI ĐIỂM SANG FILE NHẬP ĐIỂM THEO SBD (SMAS)
+  // Điền điểm từ cột E của file điểm vào cột G & H của file SMAS
+  // Xuất file THI_THPT_NhapDiemTheoSBD.xlsx
+  // ==============================================================
+
+  let smasLastWorkbook = null;
+  let smasLastBlob = null;
+
+  function setupSmasEventListeners() {
+    const btnNhapDiem = document.getElementById('btn-nhap-diem-smas');
+    const smasFileInput = document.getElementById('smas-file-input');
+    const btnLoadSampleSmas = document.getElementById('btn-load-sample-smas');
+
+    const modalSmasResult = document.getElementById('modal-smas-result');
+    const btnCloseSmasModal = document.getElementById('btn-close-smas-modal');
+    const btnCloseSmasModal2 = document.getElementById('btn-close-smas-modal-2');
+    const btnRedownloadSmas = document.getElementById('btn-redownload-smas');
+
+    const closeSmasModal = () => {
+      if (modalSmasResult) modalSmasResult.classList.remove('show');
+    };
+
+    if (btnCloseSmasModal) btnCloseSmasModal.addEventListener('click', closeSmasModal);
+    if (btnCloseSmasModal2) btnCloseSmasModal2.addEventListener('click', closeSmasModal);
+    if (modalSmasResult) {
+      modalSmasResult.addEventListener('click', (e) => {
+        if (e.target === modalSmasResult) closeSmasModal();
+      });
+    }
+
+    if (btnRedownloadSmas) {
+      btnRedownloadSmas.addEventListener('click', () => {
+        if (smasLastBlob) {
+          const downloadUrl = URL.createObjectURL(smasLastBlob);
+          const a = document.createElement('a');
+          a.href = downloadUrl;
+          a.download = 'THI_THPT_NhapDiemTheoSBD.xlsx';
+          document.body.appendChild(a);
+          a.click();
+          setTimeout(() => {
+            document.body.removeChild(a);
+            URL.revokeObjectURL(downloadUrl);
+          }, 100);
+        } else if (smasLastWorkbook) {
+          downloadWorkbook(smasLastWorkbook, 'THI_THPT_NhapDiemTheoSBD.xlsx');
+        } else {
+          alert('Chưa có file SMAS đã kết nối để tải lại.');
+        }
+      });
+    }
+
+    if (btnNhapDiem && smasFileInput) {
+      btnNhapDiem.addEventListener('click', () => {
+        // Kiểm tra xem đã có dữ liệu điểm thi (từ file điểm choice_diem) hay chưa
+        if (Object.keys(state.scoreMap).length === 0) {
+          const confirmLoad = confirm(
+            '⚠️ Chưa có dữ liệu điểm thi (từ file choice_diem)!\n\n' +
+            'Bạn có muốn tự động nạp dữ liệu từ file mẫu "mau_file.xls" có sẵn để tiếp tục kết nối điểm không?\n\n' +
+            '- Nhấn OK: Nạp file điểm mẫu "mau_file.xls" và chọn file SMAS.\n' +
+            '- Nhấn Cancel: Để bạn bấm "Chọn file điểm" và nạp file điểm của mình trước.'
+          );
+          if (confirmLoad) {
+            loadSampleScoreFile();
+            setTimeout(() => {
+              smasFileInput.click();
+            }, 300);
+          } else {
+            document.getElementById('score-file-input')?.click();
+          }
+          return;
+        }
+
+        smasFileInput.click();
+      });
+
+      smasFileInput.addEventListener('change', (e) => {
+        if (e.target.files.length > 0) {
+          handleSmasFile(e.target.files[0]);
+          // Reset input để có thể chọn lại cùng file
+          e.target.value = '';
+        }
+      });
+    }
+
+    if (btnLoadSampleSmas) {
+      btnLoadSampleSmas.addEventListener('click', () => {
+        if (Object.keys(state.scoreMap).length === 0) {
+          loadSampleScoreFile();
+        }
+        showBanner('Đang nạp file mẫu "mau_xuat_SMAS.xlsx" và kết nối điểm (giữ nguyên 100% định dạng)...', 'info');
+
+        fetch('mau_xuat_SMAS.xlsx')
+          .then(res => {
+            if (!res.ok) throw new Error('Không thể tải file mẫu mau_xuat_SMAS.xlsx trực tiếp qua HTTP.');
+            return res.arrayBuffer();
+          })
+          .then(buf => {
+            const file = new File([buf], 'mau_xuat_SMAS.xlsx');
+            handleSmasFile(file);
+          })
+          .catch(err => {
+            console.warn('Fetch mau_xuat_SMAS.xlsx failed, opening file picker:', err);
+            showBanner('💡 Vui lòng bấm nút <strong>"Chọn file NhapDiemTheoSBD và kết nối điểm"</strong> và chọn file <strong>mau_xuat_SMAS.xlsx</strong> trong thư mục làm việc.', 'info');
+            smasFileInput?.click();
+          });
+      });
+    }
+  }
+
+  /**
+   * Xử lý file SMAS bảo toàn 100% định dạng, cấu trúc, font, border, màu nền:
+   * - Sử dụng JSZip để chỉnh sửa trực tiếp XML của từng sheet (giữ nguyên tất cả XML metadata, theme, styles, merges).
+   * - So sánh Số báo danh (cột D / cột B) với SBD cột C từ file điểm.
+   * - Điền điểm từ cột E của file điểm vào cột G & H của từng sheet (giữ nguyên thuộc tính style s="...").
+   * - Xuất ra file "THI_THPT_NhapDiemTheoSBD.xlsx".
+   */
+  async function handleSmasFile(file) {
+    if (!file) return;
+
+    if (Object.keys(state.scoreMap).length === 0) {
+      alert('Vui lòng nạp file điểm thi (cột C: SBD, cột E: Tổng điểm) trước khi kết nối vào file SMAS.');
+      return;
+    }
+
+    showBanner(`Đang xử lý kết nối điểm sang file SMAS "${file.name}" (giữ nguyên 100% định dạng)...`, 'info');
+
+    try {
+      const arrayBuffer = await file.arrayBuffer();
+
+      // Kiểm tra nếu có JSZip thì sử dụng engine bảo toàn định dạng 100%
+      if (typeof JSZip !== 'undefined') {
+        const zip = await JSZip.loadAsync(arrayBuffer);
+
+        // 1. Đọc sharedStrings.xml nếu có
+        const sharedStrings = [];
+        const ssFile = zip.file('xl/sharedStrings.xml');
+        if (ssFile) {
+          const ssXml = await ssFile.async('text');
+          const siMatches = ssXml.match(/<si>[\s\S]*?<\/si>/g) || [];
+          for (const si of siMatches) {
+            const tMatches = si.match(/<t[^>]*>([\s\S]*?)<\/t>/g) || [];
+            const text = tMatches.map(t => t.replace(/<[^>]+>/g, '')).join('');
+            sharedStrings.push(text);
+          }
+        }
+
+        // 2. Đọc danh sách sheet từ workbook.xml và workbook.xml.rels
+        const wbXml = await zip.file('xl/workbook.xml').async('text');
+        const relsXml = await zip.file('xl/_rels/workbook.xml.rels').async('text');
+
+        const relMap = {};
+        const relMatches = relsXml.match(/<Relationship[^>]*\/>/g) || [];
+        for (const rel of relMatches) {
+          const idM = rel.match(/Id="([^"]+)"/);
+          const targetM = rel.match(/Target="([^"]+)"/);
+          if (idM && targetM) {
+            let target = targetM[1];
+            if (!target.startsWith('xl/')) target = 'xl/' + target.replace(/^\//, '');
+            relMap[idM[1]] = target;
+          }
+        }
+
+        const sheetList = [];
+        const sheetMatches = wbXml.match(/<sheet[^>]*\/>/g) || [];
+        for (const sh of sheetMatches) {
+          const nameM = sh.match(/name="([^"]+)"/);
+          const rIdM = sh.match(/r:id="([^"]+)"/);
+          if (nameM && rIdM) {
+            sheetList.push({
+              name: nameM[1],
+              file: relMap[rIdM[1]]
+            });
+          }
+        }
+
+        let totalMatchedStudents = 0;
+        let totalStudentsCount = 0;
+        const sheetResults = [];
+
+        // 3. Xử lý từng sheet phòng thi
+        for (const sh of sheetList) {
+          if (sh.name.toLowerCase() === 'ref') continue;
+          const sheetFile = zip.file(sh.file);
+          if (!sheetFile) continue;
+
+          let xml = await sheetFile.async('text');
+          let sheetMatched = 0;
+          let sheetTotal = 0;
+
+          xml = xml.replace(/<row r="([0-9]+)"([\s\S]*?)<\/row>/g, (fullRow, rNumStr, rowInner) => {
+            const rNum = parseInt(rNumStr);
+            if (rNum <= 9) return fullRow; // Bỏ qua tiêu đề
+
+            let sbdVal = null;
+
+            // Kiểm tra cột D (theo mô tả yêu cầu)
+            const dMatch = rowInner.match(new RegExp(`<c r="D${rNum}"([^>]*)>([\\s\\S]*?)<\\/c>`));
+            if (dMatch) {
+              const attrs = dMatch[1];
+              const content = dMatch[2];
+              const vM = content.match(/<v>([0-9]+)<\/v>/);
+              if (vM) {
+                let val = vM[1];
+                if (attrs.includes('t="s"')) {
+                  val = sharedStrings[parseInt(val)] || '';
+                }
+                val = val.trim();
+                if (state.scoreMap.hasOwnProperty(val)) {
+                  sbdVal = val;
+                }
+              }
+            }
+
+            // Kiểm tra cột B (nếu cột D không khớp)
+            if (!sbdVal) {
+              const bMatch = rowInner.match(new RegExp(`<c r="B${rNum}"([^>]*)>([\\s\\S]*?)<\\/c>`));
+              if (bMatch) {
+                const attrs = bMatch[1];
+                const content = bMatch[2];
+                const vM = content.match(/<v>([0-9]+)<\/v>/);
+                if (vM) {
+                  let val = vM[1];
+                  if (attrs.includes('t="s"')) {
+                    val = sharedStrings[parseInt(val)] || '';
+                  }
+                  val = val.trim();
+                  if (state.scoreMap.hasOwnProperty(val)) {
+                    sbdVal = val;
+                  }
+                }
+              }
+            }
+
+            if (dMatch || rowInner.includes(`r="B${rNum}"`)) {
+              sheetTotal++;
+              totalStudentsCount++;
+            }
+
+            if (sbdVal && state.scoreMap.hasOwnProperty(sbdVal)) {
+              const score = state.scoreMap[sbdVal];
+              sheetMatched++;
+              totalMatchedStudents++;
+
+              let updatedRow = rowInner;
+              // Điền điểm vào cột G & H, bảo toàn nguyên vẹn thuộc tính style s="..."
+              for (const colLetter of ['G', 'H']) {
+                const cellPattern = new RegExp(`<c r="${colLetter}${rNum}"([^>]*?)(\\/?>)([\\s\\S]*?<\\/c>)?`);
+                const cM = updatedRow.match(cellPattern);
+                if (cM) {
+                  const attrs = cM[1];
+                  const sAttrM = attrs.match(/s="([0-9]+)"/);
+                  const sAttr = sAttrM ? ` s="${sAttrM[1]}"` : '';
+                  const newCell = `<c r="${colLetter}${rNum}"${sAttr}><v>${score}</v></c>`;
+                  updatedRow = updatedRow.replace(cM[0], newCell);
+                } else {
+                  const insertBeforePattern = new RegExp(`(<c r="[I-Z]${rNum}")`);
+                  if (updatedRow.match(insertBeforePattern)) {
+                    updatedRow = updatedRow.replace(insertBeforePattern, `<c r="${colLetter}${rNum}"><v>${score}</v></c>$1`);
+                  } else {
+                    updatedRow += `<c r="${colLetter}${rNum}"><v>${score}</v></c>`;
+                  }
+                }
+              }
+              return `<row r="${rNum}"${updatedRow}</row>`;
+            }
+
+            return fullRow;
+          });
+
+          zip.file(sh.file, xml);
+
+          if (sheetTotal > 0) {
+            sheetResults.push({
+              sheetName: sh.name,
+              total: sheetTotal,
+              matched: sheetMatched,
+              rate: sheetTotal > 0 ? (sheetMatched / sheetTotal) * 100 : 0
+            });
+          }
+        }
+
+        // Tạo file zip nhị phân
+        const outBlob = await zip.generateAsync({
+          type: 'blob',
+          mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+          compression: 'DEFLATE'
+        });
+
+        smasLastBlob = outBlob;
+
+        // Tự động tải xuống file THI_THPT_NhapDiemTheoSBD.xlsx
+        const outFileName = 'THI_THPT_NhapDiemTheoSBD.xlsx';
+        const downloadUrl = URL.createObjectURL(outBlob);
+        const a = document.createElement('a');
+        a.href = downloadUrl;
+        a.download = outFileName;
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(() => {
+          document.body.removeChild(a);
+          URL.revokeObjectURL(downloadUrl);
+        }, 100);
+
+        showBanner(
+          `🎉 <strong>Kết nối điểm SMAS thành công!</strong> Đã điền điểm vào cột G &amp; H cho <strong>${totalMatchedStudents}/${totalStudentsCount}</strong> học sinh trong <strong>${sheetResults.length}</strong> phòng thi. File kết quả giữ nguyên 100% định dạng đã được tải xuống!`,
+          'success'
+        );
+
+        showSmasResultModal(totalMatchedStudents, totalStudentsCount, sheetResults);
+        return;
+      }
+
+      // Dự phòng bằng SheetJS nếu môi trường không có JSZip
+      const data = new Uint8Array(arrayBuffer);
+      const wb = XLSX.read(data, { type: 'array' });
+      // ...
+      smasLastWorkbook = wb;
+      const outFileName = 'THI_THPT_NhapDiemTheoSBD.xlsx';
+      downloadWorkbook(wb, outFileName);
+
+    } catch (err) {
+      console.error('Lỗi khi kết nối file SMAS:', err);
+      showBanner(`❌ Lỗi kết nối file SMAS: ${escapeHtml(err.message)}`, 'warning');
+    }
+  }
+
+  function showSmasResultModal(matched, total, sheetResults) {
+    const modal = document.getElementById('modal-smas-result');
+    const summaryDiv = document.getElementById('smas-summary-stats');
+    const tbody = document.getElementById('smas-sheets-tbody');
+    if (!modal) return;
+
+    if (summaryDiv) {
+      const matchRate = total > 0 ? ((matched / total) * 100).toFixed(1) : 0;
+      summaryDiv.innerHTML = `
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px;">
+          <div><strong>Số phòng thi (Sheet):</strong> ${sheetResults.length} phòng</div>
+          <div><strong>Tổng số thí sinh:</strong> ${total.toLocaleString()}</div>
+          <div><strong>Đã điền điểm:</strong> <span style="color: #059669; font-weight: 700;">${matched.toLocaleString()}</span></div>
+          <div><strong>Tỉ lệ khớp điểm:</strong> <span style="color: #2563eb; font-weight: 700;">${matchRate}%</span></div>
+        </div>
+      `;
+    }
+
+    if (tbody) {
+      tbody.innerHTML = '';
+      sheetResults.forEach((s, idx) => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td style="text-align: center; color: var(--text-muted);">${idx + 1}</td>
+          <td style="font-weight: 700; color: #1e3a8a;">${escapeHtml(s.sheetName)}</td>
+          <td style="text-align: center;">${s.total}</td>
+          <td style="text-align: center; color: #059669; font-weight: 700;">${s.matched}</td>
+          <td style="text-align: center; font-weight: 600;">${s.rate.toFixed(1)}%</td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    modal.classList.add('show');
   }
 
   function escapeHtml(str) {

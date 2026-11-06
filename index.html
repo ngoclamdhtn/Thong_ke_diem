@@ -74,6 +74,12 @@
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"></polyline><path d="M3 11V9a4 4 0 0 1 4-4h14"></path><polyline points="7 23 3 19 7 15"></polyline><path d="M21 13v2a4 4 0 0 1-4 4H3"></path></svg>
             Chuyển cấu trúc OLM sang TNMAKER
           </button>
+
+          <button type="button" class="btn btn-smas" id="btn-nhap-diem-smas">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
+            Chọn file NhapDiemTheoSBD và kết nối điểm
+          </button>
+          <input type="file" id="smas-file-input" accept=".xlsx,.xls" style="display: none;">
         </div>
 
       </div>
@@ -83,8 +89,12 @@
         <div style="display: flex; align-items: center; gap: 16px; flex-wrap: wrap;">
           <span>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: -2px; margin-right: 4px;"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
-            File mẫu thử nghiệm:
+            File mẫu điểm:
             <button type="button" id="btn-load-sample" style="color: var(--accent-blue); font-weight: 600;">Dùng file "mau_file.xls" có sẵn</button>
+          </span>
+          <span>
+            Mẫu SMAS:
+            <button type="button" id="btn-load-sample-smas" style="color: #0d9488; font-weight: 600;">Dùng file "mau_xuat_SMAS.xlsx" có sẵn</button>
           </span>
           <span>
             <button type="button" id="btn-change-roster" style="color: #475569;">Đổi file danh sách học sinh (.xlsx)</button>
@@ -479,7 +489,55 @@
     </div>
   </div>
 
+  <!-- Modal Kết Quả Kết Nối Điểm SMAS -->
+  <div class="modal-overlay" id="modal-smas-result">
+    <div class="modal-box modal-lg">
+      <div class="modal-header">
+        <h3 style="display: flex; align-items: center; gap: 8px;">
+          <span style="font-size: 20px;">✅</span>
+          KẾT NỐI ĐIỂM VÀO FILE SMAS THÀNH CÔNG
+        </h3>
+        <button type="button" class="modal-close" id="btn-close-smas-modal">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="alert-banner alert-success" style="margin-bottom: 14px;">
+          <div>
+            Đã kết nối thành công điểm thi từ file điểm vào <strong>cột G</strong> (Điểm bài thi) và <strong>cột H</strong> (Điểm thực tế) của tất cả các phòng thi trong file SMAS!
+          </div>
+        </div>
+        <div style="font-size: 13.5px; margin-bottom: 14px; background: #f8fafc; padding: 12px 16px; border-radius: var(--radius-sm); border: 1px solid var(--border-color);" id="smas-summary-stats">
+          <!-- Chi tiết thống kê -->
+        </div>
+        <label style="font-weight: 700; font-size: 13px; color: #1e293b; margin-bottom: 6px; display: block;">
+          Chi tiết kết nối theo từng phòng thi (Sheet):
+        </label>
+        <div style="max-height: 240px; overflow-y: auto; border: 1px solid var(--border-color); border-radius: var(--radius-sm);">
+          <table class="data-table" style="font-size: 12.5px;">
+            <thead>
+              <tr>
+                <th style="width: 50px;">STT</th>
+                <th>Phòng thi (Sheet)</th>
+                <th style="width: 90px; text-align: center;">Sĩ số</th>
+                <th style="width: 120px; text-align: center;">Đã điền điểm</th>
+                <th style="width: 90px; text-align: center;">Tỉ lệ</th>
+              </tr>
+            </thead>
+            <tbody id="smas-sheets-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline" id="btn-close-smas-modal-2">Đóng</button>
+        <button type="button" class="btn btn-success" id="btn-redownload-smas">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+          Tải lại file THI_THPT_NhapDiemTheoSBD.xlsx
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- Nạp các thư viện JavaScript đã tải sẵn offline -->
+  <script src="jszip.min.js"></script>
   <script src="xlsx.full.min.js"></script>
   <script src="chart.umd.min.js"></script>
   <!-- Dữ liệu học sinh mặc định lấy sẵn từ sheet 'Danh_sach' của file 'Danh_sach.xlsx' -->
